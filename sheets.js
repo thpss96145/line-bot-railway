@@ -1,24 +1,22 @@
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import dotenv from "dotenv";
-import fs from "fs";
 
 dotenv.config();
 
 const SHEET_ID = process.env.SHEET_ID;
 
-// ✅ 改成從檔案載入 JSON（更安全更乾淨）
-const SERVICE_ACCOUNT_JSON = JSON.parse(
-  fs.readFileSync("service-account.json", "utf8")
-);
-
-// 🔧 修正 private_key 換行
-SERVICE_ACCOUNT_JSON.private_key = SERVICE_ACCOUNT_JSON.private_key.replace(
-  /\\n/g,
-  "\n"
+// ✅ 使用 base64 解碼 Service Account JSON
+const base64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+const decoded = Buffer.from(base64, "base64").toString("utf8");
+const SERVICE_ACCOUNT_JSON = JSON.parse(decoded);
+console.log(
+  "🔐 環境變數是否正確讀到：",
+  process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.length
 );
 
 const doc = new GoogleSpreadsheet(SHEET_ID);
+
 const auth = new JWT({
   email: SERVICE_ACCOUNT_JSON.client_email,
   key: SERVICE_ACCOUNT_JSON.private_key,
@@ -55,31 +53,16 @@ export async function writeExpenseToSheet(
     });
 
     await doc.loadInfo();
-    const sheet = doc.sheetsByTitle["LineBot記帳"]; // 根據工作表名稱取得工作表
+    const sheet = doc.sheetsByTitle["LineBot記帳"];
     const date = new Date().toLocaleString("zh-TW", {
       timeZone: "Asia/Taipei",
     });
 
-    // 假設 users 是從群組中獲取的，包含用戶名稱和 ID
-    const users = [
-      { name: "Finny", id: "Ue1c97b308ff72770da7c81dac5368f13" },
-      { name: "Alice", id: "U1234567890abcdef" },
-      { name: "Bob", id: "U9876543210abcdef" },
-      // 更多用戶...
-    ];
-
-    // 計算每人應付的金額
     const perPerson = (amount / participants).toFixed(2);
 
-    // 計算每個人應付的金額
-    const participantsInfo = users
-      .map((user) => {
-        return `${user.name} 應付 $${perPerson}`;
-      })
-      .join("\n");
-
-    // 隨機選取冷笑話
-    const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
+    const message = `✅ 記帳成功！\n📝 項目：${item}\n💰 金額：$${amount}\n🏷 類別：${category}\n👥 分帳人數：${participants} 人\n💸 每人應付：$${perPerson}\n${
+      jokes[Math.floor(Math.random() * jokes.length)]
+    }`;
 
     console.log("📤 將寫入的資料：", {
       日期: date,
@@ -100,9 +83,6 @@ export async function writeExpenseToSheet(
       分帳人數: participants,
       類別: category,
     });
-
-    const message = `✅ 記帳成功！\n📝 項目：${item}\n💰 金額：$${amount}\n🏷 類別：${category}\n👥 分帳人數：${participants} 人\n💸 每人應付：$${perPerson}\n${randomJoke}`;
-    console.log(message); // 顯示結果
 
     return message;
   } catch (error) {
