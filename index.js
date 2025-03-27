@@ -2,7 +2,6 @@ import express from "express";
 import { Client } from "@line/bot-sdk";
 import { analyzeMessage } from "./gemini.js";
 import { writeExpenseToSheet } from "./sheets.js";
-import { calculateSettlement } from "./settlement.js";
 
 // ✅ 冷笑話清單
 const jokes = [
@@ -46,15 +45,6 @@ app.post("/webhook", async (req, res) => {
       const groupId = event.source.groupId || "個人";
       const userId = event.source.userId || "未知";
 
-      // ✅ ✨ 這裡加上結帳邏輯
-      if (userMessage === "/結帳") {
-        const message = await calculateSettlement(groupId);
-        await client.replyMessage(event.replyToken, {
-          type: "text",
-          text: message,
-        });
-        return;
-      }
       // ✅ 濾掉不該叫 Gemini 的訊息
       if (!shouldCallGemini(userMessage)) {
         console.log("🛑 不觸發 Gemini：", userMessage);

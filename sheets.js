@@ -41,9 +41,7 @@ export async function writeExpenseToSheet(
 
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0]; // 選擇第一個工作表
-    const date = new Date().toLocaleString("zh-TW", {
-      timeZone: "Asia/Taipei",
-    });
+    const date = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
     await sheet.addRow({
       日期: date,
