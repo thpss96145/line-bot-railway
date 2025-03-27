@@ -9,41 +9,42 @@ const GEMINI_URL = `${process.env.GEMINI_URL}?key=${GEMINI_API_KEY}`;
 
 async function analyzeMessage(text) {
   const prompt = `
-  你是一個智慧型記帳與生活助理 AI，請根據使用者輸入的內容，判斷他是要「記帳」還是「提問」。
-  
-  🧾 【記帳訊息】
-  請回傳：
-  {
-    "is_expense": true,
-    "item": "午餐",
-    "amount": 150,
-    "participants": 1,
-    "category": "餐飲"
-  }
-  
-  💬 【提問訊息】
-  請回傳：
-  {
-    "is_expense": false,
-    "is_question": true,
-    "answer": "繁體中文回答..."
-  }
-  
-  請遵守以下規則：
-  - \`participants\` 預設為 1。
-  - \`category\` 請根據語意歸類為：餐飲、交通、住宿、娛樂、訂閱、醫療、生活、學習、其他。
-  - 所有回答請使用繁體中文。
-  - 如果無法判斷，請回傳：
-  {
-    "is_expense": false
-  }
-  
-  ---
-  
-  使用者輸入如下：
-  """${text}"""
-  請用 JSON 格式回覆。
-  `;
+你是一個智慧型記帳與生活助理 AI，請根據使用者輸入的內容，判斷他是要「記帳」還是「提問」。
+
+🧾 【記帳訊息】
+- 請回傳：
+{
+  "is_expense": true,
+  "item": "午餐",
+  "amount": 150,
+  "participants": 1,
+  "category": "餐飲"
+}
+
+💬 【提問訊息】
+- 請回傳：
+{
+  "is_expense": false,
+  "is_question": true,
+  "answer": "繁體中文回答..."
+}
+
+請遵守以下規則：
+- \`participants\` 預設為 1。
+- \`category\` 請根據語意歸類為：餐飲、交通、住宿、娛樂、訂閱、醫療、生活、學習、其他。
+- 如果語句中有「人數」或「個人」等詞語出現，請將它作為分帳人數。
+- 若語句中有數字，並且數字的格式為數字+物品（如「蘋果電腦 20000 4」），則可以推斷金額為數字，數字後面的數字則為參與人數。人數在後面的情況也可視為分帳人數。
+- 所有回答請使用繁體中文。
+- 如果無法判斷，請回傳：
+{
+  "is_expense": false
+}
+
+---
+使用者輸入如下：
+"""${text}"""
+請用 JSON 格式回覆。
+`; // 🛠️ 設定 AI 提問內容
 
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
