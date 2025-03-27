@@ -27,13 +27,19 @@ const config = {
 };
 const client = new Client(config);
 
-// ✅ 判斷是否需要叫 Gemini
 function shouldCallGemini(text) {
-  const lower = text.toLowerCase();
-  const triggers = ["/問", "@ai", "@問", "/ai"];
-  if (triggers.some((t) => lower.includes(t))) return true;
-  const expenseLike = /^\s*\S+\s+\d+/.test(text);
-  return expenseLike;
+  const lower = text.toLowerCase().trim();
+  const aiTriggers = ["/問", "@ai", "@問", "/ai"];
+
+  // 啟動 Gemini 問答的觸發指令
+  if (aiTriggers.some((t) => lower.startsWith(t))) return true;
+
+  // 像「午餐 120」這類有金額的記帳句
+  const expenseLike = /^\S+\s+\d+/.test(lower);
+  if (expenseLike) return true;
+
+  // 其餘內容不處理
+  return false;
 }
 
 app.post("/webhook", async (req, res) => {
@@ -42,38 +48,43 @@ app.post("/webhook", async (req, res) => {
   for (let event of events) {
     if (event.type === "message" && event.message.type === "text") {
       const userMessage = event.message.text.trim();
-      const groupId = event.source.groupId || "個人"; // 如果是群組，會有 groupId，否則預設為 '個人'
-      const userId = event.source.userId || "未知"; // 確保獲得用戶 ID
+      const groupId = event.source.groupId || "個人";
+      const userId = event.source.userId || "未知";
 
       console.log("群組 ID:", groupId);
       console.log("用戶 ID:", userId);
+      console.log("使用者訊息:", userMessage);
 
-      // 呼叫 AI 解析記帳內容
+      // ✅ 若判斷不是記帳句也不是 AI 指令 ➝ 忽略
+      if (!shouldCallGemini(userMessage)) {
+        console.log("🙈 跳過：不是記帳句也不是 AI 指令");
+        continue;
+      }
+
+      // ✅ 進行 AI 分析
       const analysis = await analyzeMessage(userMessage);
       console.log("🔥 AI 分析結果：", JSON.stringify(analysis, null, 2));
 
       if (analysis.is_expense) {
-        // 確保將群組ID、用戶ID、項目等資料寫入 Google Sheets
         const message = await writeExpenseToSheet(
-          groupId, // 傳遞群組 ID
-          userId, // 傳遞用戶 ID
-          analysis.item, // 項目名稱
-          analysis.amount, // 金額
-          analysis.participants, // 分帳人數
-          analysis.category // 類別
+          groupId,
+          userId,
+          analysis.item,
+          analysis.amount,
+          analysis.participants,
+          analysis.category
         );
 
-        if (message) {
-          await client.replyMessage(event.replyToken, {
-            type: "text",
-            text: message,
-          });
-        } else {
-          await client.replyMessage(event.replyToken, {
-            type: "text",
-            text: "⚠️ 記帳成功，但寫入 Google Sheets 失敗！請稍後再試。",
-          });
-        }
+        await client.replyMessage(event.replyToken, {
+          type: "text",
+          text:
+            message || "⚠️ 記帳成功，但寫入 Google Sheets 失敗！請稍後再試。",
+        });
+      } else if (analysis.is_question && analysis.answer) {
+        await client.replyMessage(event.replyToken, {
+          type: "text",
+          text: analysis.answer,
+        });
       } else {
         await client.replyMessage(event.replyToken, {
           type: "text",
