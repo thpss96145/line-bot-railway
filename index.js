@@ -2,6 +2,7 @@ import express from "express";
 import { Client } from "@line/bot-sdk";
 import { analyzeMessage } from "./gemini.js";
 import { writeExpenseToSheet } from "./sheets.js";
+import { askGeminiWithSearch } from "./gemini-search.js"; // 先確保你有 export 這個函式
 
 // ✅ 冷笑話清單
 const jokes = [
@@ -54,6 +55,21 @@ app.post("/webhook", async (req, res) => {
       console.log("群組 ID:", groupId);
       console.log("用戶 ID:", userId);
       console.log("使用者訊息:", userMessage);
+
+      // 🟢 檢查是否為「搜尋型 AI 指令」
+      if (
+        userMessage.startsWith("/問") ||
+        userMessage.startsWith("@ai") ||
+        userMessage.startsWith("@問") ||
+        userMessage.startsWith("/ai")
+      ) {
+        const reply = await askGeminiWithSearch(userMessage);
+        await client.replyMessage(event.replyToken, {
+          type: "text",
+          text: reply,
+        });
+        return; // ⛔ 跳過後面流程
+      }
 
       // ✅ 若判斷不是記帳句也不是 AI 指令 ➝ 忽略
       if (!shouldCallGemini(userMessage)) {
