@@ -7,29 +7,23 @@ import fetch from "node-fetch"; // 引入 node-fetch
 const app = express();
 app.use(express.json());
 
-// ✅ 設定 LINE Bot
+// 設定 LINE Bot
 const config = {
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
   channelSecret: process.env.LINE_SECRET,
 };
 const client = new Client(config);
 
+// 判斷是否需要調用 Gemini
 function shouldCallGemini(text) {
   const lower = text.toLowerCase().trim();
-  const aiTriggers = ["/問", "@ai", "@問", "/ai"];
-
-  // 啟動 Gemini 問答的觸發指令
-  if (aiTriggers.some((t) => lower.startsWith(t))) return true;
-
-  // 像「午餐 120」這類有金額的記帳句
-  const expenseLike = /^\S+\s+\d+/.test(lower);
-  if (expenseLike) return true;
-
-  // 其餘內容不處理
-  return false;
+  return (
+    ["/問", "@ai", "@問", "/ai"].some((t) => lower.startsWith(t)) || // 問答指令
+    /^\S+\s+\d+/.test(lower) // 記帳句
+  );
 }
 
-// ✅ 發送讀取動畫
+// 發送讀取動畫
 function sendLoading(userId, seconds = 5) {
   const url = "https://api.line.me/v2/bot/chat/loading/start"; // 發送讀取動畫的API
   const payload = {
@@ -38,22 +32,29 @@ function sendLoading(userId, seconds = 5) {
   };
 
   const options = {
-    method: "POST", // 使用POST方法
+    method: "POST",
     headers: {
-      Authorization: "Bearer " + process.env.LINE_ACCESS_TOKEN, // 設定認證標頭
-      "Content-Type": "application/json", // 設定請求體的格式為 JSON
+      Authorization: "Bearer " + process.env.LINE_ACCESS_TOKEN,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload), // 將資料轉換為JSON格式
+    body: JSON.stringify(payload),
   };
 
-  // 使用 node-fetch 發送請求
   fetch(url, options)
     .then((response) => response.json())
     .then((data) => console.log("Loading animation started:", data))
     .catch((error) => console.error("Error sending loading animation:", error));
 }
 
-// ✅ 設定 Webhook 路由
+// 回應錯誤訊息
+function replyError(event, message) {
+  return client.replyMessage(event.replyToken, {
+    type: "text",
+    text: message,
+  });
+}
+
+// 設定 Webhook 路由
 app.post("/webhook", async (req, res) => {
   const events = req.body.events;
 
@@ -74,35 +75,23 @@ app.post("/webhook", async (req, res) => {
         userMessage.startsWith("@問") ||
         userMessage.startsWith("/ai")
       ) {
-        // 顯示讀取動畫
         sendLoading(userId, 5); // 顯示 5 秒的「處理中」動畫
 
         try {
           // 執行 Gemini 查詢處理
-          const analysis = await analyzeMessage(userMessage); // 等待分析結果
-
-          // 確保回傳的結果符合預期
+          const analysis = await analyzeMessage(userMessage);
           if (analysis.is_question && analysis.answer) {
-            // 回傳問題回答
             await client.replyMessage(event.replyToken, {
               type: "text",
               text: analysis.answer,
             });
           } else {
-            // 回傳錯誤或其他訊息
-            await client.replyMessage(event.replyToken, {
-              type: "text",
-              text: "⚠️ 無法處理您的問題，請稍後再試。",
-            });
+            await replyError(event, "⚠️ 無法處理您的問題，請稍後再試。");
           }
         } catch (error) {
           console.error("Gemini API 錯誤：", error);
-          await client.replyMessage(event.replyToken, {
-            type: "text",
-            text: "⚠️ 目前無法處理您的問題，請稍後再試1。",
-          });
+          await replyError(event, "⚠️ 目前無法處理您的問題，請稍後再試。");
         }
-
         return; // 跳過後面流程
       }
 
@@ -118,7 +107,6 @@ app.post("/webhook", async (req, res) => {
 
       // 記帳處理
       if (analysis.is_expense) {
-        // 顯示讀取動畫（處理中）
         sendLoading(userId, 5); // 顯示 5 秒的「處理中」動畫
 
         const message = await writeExpenseToSheet(
@@ -129,7 +117,6 @@ app.post("/webhook", async (req, res) => {
           analysis.participants,
           analysis.category
         );
-
         await client.replyMessage(event.replyToken, {
           type: "text",
           text:
