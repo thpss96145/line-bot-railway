@@ -1,7 +1,6 @@
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 
-// ✅ 載入 `.env` 變數
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -9,33 +8,44 @@ const GEMINI_URL = `${process.env.GEMINI_URL}?key=${GEMINI_API_KEY}`;
 
 async function analyzeMessage(text) {
   const prompt = `
-你是一個智慧型記帳與生活助理 AI，請根據使用者輸入的內容，判斷他是要「記帳」還是「提問」。
+你是一個智慧型記帳與生活助理 AI，請根據使用者輸入的自然語言句子，判斷他是要「記帳」還是「提問」。
 
-🧾 【記帳訊息】
-- 請回傳：
+🧾【記帳訊息】
+請回傳格式如下：
 {
   "is_expense": true,
-  "item": "午餐",
-  "amount": 150,
-  "participants": 1,
-  "category": "餐飲"
+  "item": "項目",
+  "amount": 金額,
+  "participants": 人數（預設為1，如有提到「我和4個人」請自動加1成為5）,
+  "category": "餐飲｜交通｜住宿｜娛樂｜訂閱｜醫療｜生活｜學習｜其他"
 }
 
-💬 【提問訊息】
-- 請回傳：
+💬【提問訊息】
+請回傳格式如下：
 {
   "is_expense": false,
   "is_question": true,
   "answer": "繁體中文回答..."
 }
 
-請遵守以下規則：
+📌 請遵守以下規則：
+- 所有回答請使用繁體中文。
 - \`participants\` 預設為 1。
 - \`category\` 請根據語意歸類為：餐飲、交通、住宿、娛樂、訂閱、醫療、生活、學習、其他。
-- 如果語句中有「人數」或「個人」等詞語出現，請將它作為分帳人數。
-- 若語句中有數字，並且數字的格式為數字+物品（如「蘋果電腦 20000 4」），則可以推斷金額為數字，數字後面的數字則為參與人數。人數在後面的情況也可視為分帳人數。
-- 所有回答請使用繁體中文。
-- 如果無法判斷，請回傳：
+- 若語句中出現「我花了」「花費」「每人出」等描述，即推斷為支出。
+- 如果語句中有「和4個人」「共5人」「每人出3000」等描述，請合理推斷總金額與參與人數，包含自己。
+- 即使語序不固定、語氣口語化也請盡量辨識記帳意圖。
+
+📚 以下是一些自然語句範例：
+- 「我跟5個人一起看電影，每人出3000」
+- 「今天和朋友們去看緋紅女巫，每人出了3000」
+- 「我請3個人吃飯花了1000」
+- 「搭高鐵到台中花了1500」
+- 「我們三個人一起吃早餐，總共800」
+- 「Netflix訂閱 390 2」
+- 「午餐 200」
+
+❌ 若無法明確判斷請回傳：
 {
   "is_expense": false
 }
@@ -44,7 +54,7 @@ async function analyzeMessage(text) {
 使用者輸入如下：
 """${text}"""
 請用 JSON 格式回覆。
-`; // 🛠️ 設定 AI 提問內容
+`;
 
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -59,15 +69,14 @@ async function analyzeMessage(text) {
   const data = await response.json();
 
   try {
-    console.log("AI API 回應:", JSON.stringify(data, null, 2)); // 🛠️ 印出完整的 AI 回應
     const rawText = data.candidates[0].content.parts[0].text;
-
-    // ✅ 去掉 ```json 這類格式
-    const jsonText = rawText.replace(/```json\n|\n```/g, "").trim();
-
-    return JSON.parse(jsonText);
+    const jsonText = rawText.replace(/```json\n?|\n?```/g, "").trim();
+    const result = JSON.parse(jsonText);
+    console.log("✅ Gemini 回傳：", result);
+    return result;
   } catch (error) {
-    console.error("JSON 解析錯誤:", error);
+    console.error("❌ JSON 解析錯誤:", error);
+    console.error("🧾 原始 Gemini 回傳：", JSON.stringify(data, null, 2));
     return { is_expense: false };
   }
 }
