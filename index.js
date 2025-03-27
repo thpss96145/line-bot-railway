@@ -42,40 +42,31 @@ app.post("/webhook", async (req, res) => {
   for (let event of events) {
     if (event.type === "message" && event.message.type === "text") {
       const userMessage = event.message.text.trim();
-      const groupId = event.source.groupId || "個人";
-      const userId = event.source.userId || "未知";
+      const groupId = event.source.groupId || "個人"; // 如果是群組，會有 groupId，否則預設為 '個人'
+      const userId = event.source.userId || "未知"; // 確保獲得用戶 ID
 
-      // ✅ 濾掉不該叫 Gemini 的訊息
-      if (!shouldCallGemini(userMessage)) {
-        console.log("🛑 不觸發 Gemini：", userMessage);
-        return;
-      }
+      console.log("群組 ID:", groupId);
+      console.log("用戶 ID:", userId);
 
-      // 🔹 呼叫 AI 解析記帳內容
+      // 呼叫 AI 解析記帳內容
       const analysis = await analyzeMessage(userMessage);
       console.log("🔥 AI 分析結果：", JSON.stringify(analysis, null, 2));
 
       if (analysis.is_expense) {
-        // ✅ 計算每人應付金額
-        const perPerson = (analysis.amount / analysis.participants).toFixed(2);
-
-        // ✅ 寫入 Google Sheets 的部分
-        const success = await writeExpenseToSheet(
-          groupId,
-          userId,
-          analysis.item,
-          analysis.amount,
-          analysis.participants,
-          analysis.category
+        // 確保將群組ID、用戶ID、項目等資料寫入 Google Sheets
+        const message = await writeExpenseToSheet(
+          groupId, // 傳遞群組 ID
+          userId, // 傳遞用戶 ID
+          analysis.item, // 項目名稱
+          analysis.amount, // 金額
+          analysis.participants, // 分帳人數
+          analysis.category // 類別
         );
 
-        if (success) {
-          // 隨機選擇一個冷笑話
-          const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
-
+        if (message) {
           await client.replyMessage(event.replyToken, {
             type: "text",
-            text: `✅ 記帳成功！\n📝 項目：${analysis.item}\n💰 金額：$${analysis.amount}\n🏷 類別：${analysis.category}\n👥 分帳人數：${analysis.participants} 人\n💸 每人應付：$${perPerson}\n\n${randomJoke}`,
+            text: message,
           });
         } else {
           await client.replyMessage(event.replyToken, {
@@ -83,12 +74,6 @@ app.post("/webhook", async (req, res) => {
             text: "⚠️ 記帳成功，但寫入 Google Sheets 失敗！請稍後再試。",
           });
         }
-      } else if (analysis.is_question) {
-        // ✅ AI 問答處理邏輯
-        await client.replyMessage(event.replyToken, {
-          type: "text",
-          text: `🤖 ${analysis.answer}`,
-        });
       } else {
         await client.replyMessage(event.replyToken, {
           type: "text",
