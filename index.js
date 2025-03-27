@@ -2,7 +2,6 @@ import express from "express";
 import { Client } from "@line/bot-sdk";
 import { analyzeMessage } from "./gemini.js";
 import { writeExpenseToSheet } from "./sheets.js";
-import { askGeminiWithSearch } from "./gemini-search.js"; // 先確保你有 export 這個函式
 import fetch from "node-fetch"; // 引入 node-fetch
 
 const app = express();
@@ -68,47 +67,56 @@ app.post("/webhook", async (req, res) => {
       console.log("用戶 ID:", userId);
       console.log("使用者訊息:", userMessage);
 
-      // 🟢 檢查是否為「搜尋型 AI 指令」
+      // 檢查是否為「搜尋型 AI 指令」
       if (
         userMessage.startsWith("/問") ||
         userMessage.startsWith("@ai") ||
         userMessage.startsWith("@問") ||
         userMessage.startsWith("/ai")
       ) {
-        // 1️⃣ 顯示讀取動畫
+        // 顯示讀取動畫
         sendLoading(userId, 5); // 顯示 5 秒的「處理中」動畫
 
         try {
-          // 2️⃣ 執行 Gemini 查詢處理
-          const reply = await askGeminiWithSearch(userMessage);
+          // 執行 Gemini 查詢處理
+          const analysis = await analyzeMessage(userMessage); // 等待分析結果
 
-          // 3️⃣ 回覆處理結果
-          await client.replyMessage(event.replyToken, {
-            type: "text",
-            text: reply,
-          });
+          // 確保回傳的結果符合預期
+          if (analysis.is_question && analysis.answer) {
+            // 回傳問題回答
+            await client.replyMessage(event.replyToken, {
+              type: "text",
+              text: analysis.answer,
+            });
+          } else {
+            // 回傳錯誤或其他訊息
+            await client.replyMessage(event.replyToken, {
+              type: "text",
+              text: "⚠️ 無法處理您的問題，請稍後再試。",
+            });
+          }
         } catch (error) {
           console.error("Gemini API 錯誤：", error);
           await client.replyMessage(event.replyToken, {
             type: "text",
-            text: "⚠️ 目前無法處理您的問題，請稍後再試。",
+            text: "⚠️ 目前無法處理您的問題，請稍後再試1。",
           });
         }
 
-        return; // ⛔ 跳過後面流程
+        return; // 跳過後面流程
       }
 
-      // ✅ 若判斷不是記帳句也不是 AI 指令 ➝ 忽略
+      // 若判斷不是記帳句也不是 AI 指令 ➝ 忽略
       if (!shouldCallGemini(userMessage)) {
         console.log("🙈 跳過：不是記帳句也不是 AI 指令");
         continue;
       }
 
-      // ✅ 進行 AI 分析
+      // 進行 AI 分析
       const analysis = await analyzeMessage(userMessage);
       console.log("🔥 AI 分析結果：", JSON.stringify(analysis, null, 2));
 
-      // ✅ 記帳處理
+      // 記帳處理
       if (analysis.is_expense) {
         // 顯示讀取動畫（處理中）
         sendLoading(userId, 5); // 顯示 5 秒的「處理中」動畫
