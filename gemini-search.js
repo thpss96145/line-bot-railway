@@ -3,6 +3,7 @@
 import { checkSearchQuota } from "./limit.js";
 import { searchGoogle } from "./search.js"; // 等下會寫這支
 import { analyzeMessage } from "./gemini.js"; // 你原本的 AI 接口
+import fetch from "node-fetch";
 
 export async function askGeminiWithSearch(userQuestion) {
   if (!checkSearchQuota()) {
