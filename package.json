@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@line/bot-sdk": "^9.7.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "google-auth-library": "^9.15.1",
+    "google-spreadsheet": "^4.1.4",
+    "node-fetch": "^3.3.2"
+  }
+}
