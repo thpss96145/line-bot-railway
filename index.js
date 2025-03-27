@@ -3,6 +3,20 @@ import { Client } from "@line/bot-sdk";
 import { analyzeMessage } from "./gemini.js";
 import { writeExpenseToSheet } from "./sheets.js";
 
+// ✅ 冷笑話清單
+const jokes = [
+  "錢不是問題，記帳才是。💸",
+  "越記越窮，代表你有在花錢！🧾",
+  "記帳前我是人，記完我是神。😇",
+  "今天也沒有漏掉一筆錢，感動。🥹",
+  "花錢一時爽，記帳火葬場。🔥",
+  "謝謝你讓我活在表格裡。📊",
+  "帳還沒記，錢就沒了。🤯",
+  "記帳：理性戰勝慾望的瞬間。🧠",
+  "你記的不是帳，是未來的自己。💡",
+  "這筆記下去，你就自由一點。🕊️",
+];
+
 const app = express();
 app.use(express.json());
 
@@ -42,6 +56,9 @@ app.post("/webhook", async (req, res) => {
       console.log("🔥 AI 分析結果：", JSON.stringify(analysis, null, 2));
 
       if (analysis.is_expense) {
+        // ✅ 計算每人應付金額
+        const perPerson = (analysis.amount / analysis.participants).toFixed(2);
+
         // ✅ 寫入 Google Sheets 的部分
         const success = await writeExpenseToSheet(
           groupId,
@@ -53,9 +70,12 @@ app.post("/webhook", async (req, res) => {
         );
 
         if (success) {
+          // 隨機選擇一個冷笑話
+          const randomJoke = jokes[Math.floor(Math.random() * jokes.length)];
+
           await client.replyMessage(event.replyToken, {
             type: "text",
-            text: `✅ 記帳成功！\n📝 項目：${analysis.item}\n💰 金額：$${analysis.amount}\n🏷 類別：${analysis.category}\n👥 分帳人數：${analysis.participants} 人\n📄 已記錄至 Google Sheets`,
+            text: `✅ 記帳成功！\n📝 項目：${analysis.item}\n💰 金額：$${analysis.amount}\n🏷 類別：${analysis.category}\n👥 分帳人數：${analysis.participants} 人\n💸 每人應付：$${perPerson}\n\n${randomJoke}`,
           });
         } else {
           await client.replyMessage(event.replyToken, {
