@@ -1,12 +1,13 @@
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import { setAlias, getName, getUserId } from "./aliasManager.js";
 
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `${process.env.GEMINI_URL}?key=${GEMINI_API_KEY}`;
 
-async function analyzeMessage(text) {
+async function analyzeMessage(text, groupId, userId) {
   const prompt = `
 你是一個智慧型記帳與生活助理 AI，請根據使用者輸入的自然語言句子，判斷他是要「記帳」還是「提問」。
 
@@ -72,6 +73,31 @@ async function analyzeMessage(text) {
     const rawText = data.candidates[0].content.parts[0].text;
     const jsonText = rawText.replace(/```json\n?|\n?```/g, "").trim();
     const result = JSON.parse(jsonText);
+
+    // 嘗試從文字中抓出人名（中文、非項目關鍵詞）
+    const nameMatches = text.match(/[\u4e00-\u9fa5]{1,3}/g);
+    const filteredNames =
+      nameMatches?.filter((name) => !result.item?.includes(name)) || [];
+
+    // ✅ 根據是否已有 participants 判斷要不要自動 +1
+    if (
+      (!result.participants || result.participants === 1) &&
+      filteredNames.length > 0
+    ) {
+      result.participantsNames = filteredNames;
+      result.participants = filteredNames.length + 1;
+    } else if (filteredNames.length > 0) {
+      result.participantsNames = filteredNames;
+    }
+
+    // 確保自己加入參與者名單
+    const selfAlias = getName(groupId, userId); // 取得使用者的暱稱
+    console.log("取得的暱稱:", selfAlias);
+
+    if (selfAlias && !result.participantsNames.includes(selfAlias)) {
+      result.participantsNames.push(selfAlias); // 確保自己加入
+      result.participants += 1; // 人數加1
+    }
     console.log("✅ Gemini 回傳：", result);
     return result;
   } catch (error) {

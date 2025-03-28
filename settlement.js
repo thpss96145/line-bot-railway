@@ -1,69 +1,102 @@
 // settlement.js
-const mockData = [
-  // 假設 Finny 付 300 給三人分帳
-  { userId: "U1", name: "Finny", amount: 300, participants: 3 },
-  // Alice 付 450 給三人分帳
-  { userId: "U2", name: "Alice", amount: 450, participants: 3 },
-  // Bob 付 150 給三人分帳
-  { userId: "U3", name: "Bob", amount: 150, participants: 3 },
-];
+import { getExpensesByGroup } from "./sheets.js";
+import { getName, getUserId } from "./aliasManager.js";
 
-// step 1: 計算每人應付金額
-const members = {};
+// 📦 步驟 1：計算每人淨收支金額
+function calculateShares(payments) {
+  const balances = {};
 
-// 初始化每人帳目
-mockData.forEach((row) => {
-  const perPerson = row.amount / row.participants;
+  payments.forEach(({ userId, amount, participants }) => {
+    const perPerson = amount / participants.length;
 
-  mockData.forEach((member) => {
-    if (!members[member.userId]) {
-      members[member.userId] = { name: member.name, paid: 0, shouldPay: 0 };
-    }
+    participants.forEach((pid) => {
+      if (!balances[pid]) balances[pid] = 0;
+      if (pid === userId) {
+        balances[pid] += amount - perPerson;
+      } else {
+        balances[pid] -= perPerson;
+      }
+    });
   });
 
-  Object.values(members).forEach((member) => {
-    member.shouldPay += perPerson;
-  });
-
-  members[row.userId].paid += row.amount;
-});
-
-// step 2: 計算差額
-const balances = Object.entries(members).map(([userId, m]) => ({
-  userId,
-  name: m.name,
-  balance: +(m.paid - m.shouldPay).toFixed(2),
-}));
-
-// step 3: 找出債務與債權人，做簡化轉帳
-const debtors = balances
-  .filter((b) => b.balance < 0)
-  .sort((a, b) => a.balance - b.balance);
-const creditors = balances
-  .filter((b) => b.balance > 0)
-  .sort((a, b) => b.balance - a.balance);
-
-const settlements = [];
-
-while (debtors.length && creditors.length) {
-  const debtor = debtors[0];
-  const creditor = creditors[0];
-  const settleAmount = Math.min(-debtor.balance, creditor.balance);
-
-  settlements.push({
-    from: debtor.name,
-    to: creditor.name,
-    amount: settleAmount.toFixed(2),
-  });
-
-  debtor.balance += settleAmount;
-  creditor.balance -= settleAmount;
-
-  if (Math.abs(debtor.balance) < 0.01) debtors.shift();
-  if (Math.abs(creditor.balance) < 0.01) creditors.shift();
+  return balances;
 }
 
-console.log("💰 結帳結果：");
-settlements.forEach((s) => {
-  console.log(`👉 ${s.from} 應付 $${s.amount} 給 ${s.to}`);
-});
+// 💸 步驟 2：根據 balances 最小化轉帳
+function settleBalances(balances) {
+  const debtors = [],
+    creditors = [],
+    transactions = [];
+
+  for (const user in balances) {
+    const amount = balances[user];
+    if (amount < -1e-6) debtors.push({ user, amount: -amount });
+    else if (amount > 1e-6) creditors.push({ user, amount });
+  }
+
+  let i = 0,
+    j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const d = debtors[i];
+    const c = creditors[j];
+    const amt = Math.min(d.amount, c.amount);
+
+    transactions.push({ from: d.user, to: c.user, amount: amt });
+
+    d.amount -= amt;
+    c.amount -= amt;
+
+    if (d.amount < 1e-6) i++;
+    if (c.amount < 1e-6) j++;
+  }
+
+  return transactions;
+}
+
+// 🔁 整合主邏輯
+export async function generateSettlementMessage(groupId) {
+  const rows = await getExpensesByGroup(groupId);
+  if (!rows || rows.length === 0) return "⚠️ 找不到記帳資料。";
+
+  const payments = [];
+
+  for (const row of rows) {
+    const { 使用者ID, 項目, 金額, 參與者 } = row;
+    const amount = parseFloat(金額);
+    const alias = getName(groupId, 使用者ID);
+
+    if (!使用者ID || !amount || !參與者) continue;
+
+    const names = 參與者.trim().split(/\s+/); // 支援空格分隔
+    const participantIds = names
+      .map((name) => getUserId(groupId, name))
+      .filter((id) => !!id);
+
+    if (!participantIds.includes(使用者ID)) participantIds.push(使用者ID);
+
+    payments.push({
+      userId: 使用者ID,
+      name: alias || "某人",
+      amount,
+      participants: participantIds,
+    });
+  }
+
+  if (payments.length === 0) return "⚠️ 無有效記帳資料。";
+
+  const balances = calculateShares(payments);
+  const transactions = settleBalances(balances);
+
+  if (transactions.length === 0) return "🎉 目前大家都平帳囉！";
+
+  const name = (uid) => getName(groupId, uid) || uid.slice(-4);
+
+  const result = transactions
+    .map(
+      ({ from, to, amount }) =>
+        `👉 ${name(from)} ➜ 給 ${name(to)}：$${amount.toFixed(2)}`
+    )
+    .join("\n");
+
+  return `💰 分帳結果：\n${result}`;
+}

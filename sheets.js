@@ -1,6 +1,7 @@
-import { GoogleSpreadsheet } from "google-spreadsheet";
-import { JWT } from "google-auth-library";
-import dotenv from "dotenv";
+import { GoogleSpreadsheet } from "google-spreadsheet"; // 👈 引入 google-spreadsheet
+import { JWT } from "google-auth-library"; // 👈 引入 google-auth-library
+import dotenv from "dotenv"; // 👈 引入 dotenv
+import { getName, getUserId, getAliasMap } from "./aliasManager.js"; // ✅ 確保有 export getAliasMap
 
 dotenv.config();
 
@@ -43,7 +44,8 @@ export async function writeExpenseToSheet(
   item,
   amount,
   participants,
-  category
+  category,
+  participantsNames = [] // 👈 新增參與者陣列
 ) {
   try {
     doc.auth = new JWT({
@@ -58,9 +60,36 @@ export async function writeExpenseToSheet(
       timeZone: "Asia/Taipei",
     });
 
+    // 👇 放在 try 裡、寫入表單前的邏輯區段
+    const selfAlias = getName(groupId, userId);
+    console.log("🔐 全部 aliases:", JSON.stringify(getAliasMap(), null, 2));
+    console.log("🔍 使用者ID:", userId);
+    console.log("🆔 暱稱 selfAlias:", selfAlias);
+    console.log("👥 現有參與者名稱:", participantsNames);
+
+    // 看參與者裡面有沒有人對應到自己的 userId
+    const includesSelf = participantsNames.some((name) => {
+      const id = getUserId(groupId, name);
+      console.log(`🔁 檢查參與者「${name}」對應到 userId: ${id}`);
+      return id === userId;
+    });
+
+    console.log("🤔 使用者是否已包含在參與者中:", includesSelf);
+
+    if (selfAlias && !includesSelf) {
+      console.log("✅ 補上使用者自己:", selfAlias);
+      participantsNames.push(selfAlias);
+    } else {
+      console.log("📌 不需補上使用者，已在名單中");
+    }
+
+    // ✅ 強制用實際參與者數
+    const finalParticipants = participantsNames.length || 1;
     const perPerson = (amount / participants).toFixed(2);
 
-    const message = `✅ 記帳成功！\n📝 項目：${item}\n💰 金額：$${amount}\n🏷 類別：${category}\n👥 分帳人數：${participants} 人\n💸 每人應付：$${perPerson}\n${
+    const message = `✅ 記帳成功！\n📝 項目：${item}\n💰 金額：$${amount}\n🏷 類別：${category}\n👥 分帳人數：${participants} 人\n🙋‍♀️ 參與者：${participantsNames.join(
+      " "
+    )}\n💸 每人應付：$${perPerson}\n${
       jokes[Math.floor(Math.random() * jokes.length)]
     }`;
 
@@ -70,8 +99,10 @@ export async function writeExpenseToSheet(
       使用者ID: userId,
       項目: item,
       金額: amount,
-      分帳人數: participants,
+      分帳人數: finalParticipants,
+
       類別: category,
+      參與者: participantsNames.join(" "),
     });
 
     await sheet.addRow({
@@ -80,8 +111,9 @@ export async function writeExpenseToSheet(
       使用者ID: userId,
       項目: item,
       金額: amount,
-      分帳人數: participants,
+      分帳人數: participantsNames.length,
       類別: category,
+      參與者: participantsNames.join(" "), // ✅ 新欄位
     });
 
     return message;
@@ -89,4 +121,27 @@ export async function writeExpenseToSheet(
     console.error("❌ Google Sheets 記錄失敗:", error);
     return false;
   }
+}
+
+// ✅ 取得群組記帳資料
+export async function getExpensesByGroup(groupId) {
+  const doc = new GoogleSpreadsheet(SHEET_ID);
+
+  doc.auth = new JWT({
+    email: SERVICE_ACCOUNT_JSON.client_email,
+    key: SERVICE_ACCOUNT_JSON.private_key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+
+  await doc.loadInfo();
+  const sheet = doc.sheetsByTitle["LineBot記帳"];
+  const rows = await sheet.getRows();
+
+  return rows
+    .filter((row) => row["群組ID"] === groupId)
+    .map((row) => ({
+      userId: row["使用者ID"],
+      amount: Number(row["金額"]),
+      participants: Number(row["分帳人數"]),
+    }));
 }
