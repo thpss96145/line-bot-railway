@@ -1,6 +1,12 @@
 // aliasManager.js
 
-const aliasTable = {}; // e.g., { groupId: { userId: "謝", "謝": userId } }
+const aliasTable = {
+  Cc0c3f0be56c135ac12cfca231f8a84e5: {
+    Ue1c97b308ff72770da7c81dac5368f13: "謝", // 假設這是使用者的暱稱
+    U2b7a8f6c3d7b41cdd7c7e236d7fa1cf8: "楊", // 假設這是另一個使用者
+    U3c8a9d4d5a3b43aebea3e4e8b0c63429: "王", // 另一個使用者
+  },
+};
 
 /**
  * 設定使用者的暱稱（暱稱 ↔ userId 雙向對應）

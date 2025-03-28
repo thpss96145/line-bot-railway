@@ -123,7 +123,7 @@ export async function writeExpenseToSheet(
   }
 }
 
-// ✅ 取得群組記帳資料
+/// ✅ 讀取 Google Sheets 的資料
 export async function getExpensesByGroup(groupId) {
   const doc = new GoogleSpreadsheet(SHEET_ID);
 
@@ -134,14 +134,53 @@ export async function getExpensesByGroup(groupId) {
   });
 
   await doc.loadInfo();
-  const sheet = doc.sheetsByTitle["LineBot記帳"];
+  const sheet = doc.sheetsByIndex[1]; // 你目前記帳資料放在第二個分頁
   const rows = await sheet.getRows();
+  console.log("📊 資料筆數：", rows.length);
 
-  return rows
-    .filter((row) => row["群組ID"] === groupId)
-    .map((row) => ({
-      userId: row["使用者ID"],
-      amount: Number(row["金額"]),
-      participants: Number(row["分帳人數"]),
-    }));
+  // 🧠 根據欄位名稱自動找欄位位置
+  const headers = sheet.headerValues;
+  const getIndex = (key) => headers.indexOf(key);
+  const idxGroupId = getIndex("群組ID");
+  const idxUserId = getIndex("使用者ID");
+  const idxItem = getIndex("項目");
+  const idxAmount = getIndex("金額");
+  const idxParticipants = getIndex("分帳人數");
+  const idxCategory = getIndex("類別");
+  const idxNames = getIndex("參與者");
+
+  if (idxGroupId === -1) {
+    console.error("❌ 找不到『群組ID』欄位！");
+    return [];
+  }
+
+  const normalize = (s) => s?.toString().trim();
+
+  const filtered = rows.filter((row, idx) => {
+    const rawGroupId = normalize(row._rawData?.[idxGroupId]);
+    const expected = normalize(groupId);
+    const match = rawGroupId === expected;
+
+    if (!match) {
+      console.log(`🧪 [第${idx + 1}筆] 不符合群組ID`);
+      console.log(`👉 rawGroupId: "${rawGroupId}"`);
+      console.log(`👉 expected  : "${expected}"`);
+    }
+
+    return match;
+  });
+
+  console.log(`✅ 有 ${filtered.length} 筆資料符合群組 ${groupId}`);
+
+  return filtered.map((row) => {
+    const raw = row._rawData;
+    return {
+      userId: raw[idxUserId],
+      item: raw[idxItem],
+      amount: Number(raw[idxAmount]),
+      participants: Number(raw[idxParticipants]),
+      category: raw[idxCategory],
+      names: raw[idxNames],
+    };
+  });
 }

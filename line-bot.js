@@ -94,6 +94,11 @@ export async function handleEvent(event) {
       }
     }
 
+    if (userMessage === "/結帳") {
+      const result = await generateSettlementMessage(groupId); // 你已有此函式
+      return replyText(event, result);
+    }
+
     // 處理 AI 記帳指令
     if (shouldCallGemini(userMessage)) {
       sendLoading(userId, 5);
