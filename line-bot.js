@@ -1,9 +1,9 @@
 import { Client } from "@line/bot-sdk";
 import { analyzeMessage } from "./gemini.js";
-import { writeExpenseToSheet } from "./sheets.js";
+import { writeExpenseToSheet, saveAliasBinding } from "./sheets.js";
 import fetch from "node-fetch";
 import { generateSettlementMessage } from "./settlement.js"; // 確保這行有加
-import { setAlias, getName, getUserId } from "./aliasManager.js";
+import { getName, getUserId, setAlias } from "./aliasManager.js";
 
 const config = {
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
@@ -88,6 +88,8 @@ export async function handleEvent(event) {
       const alias = userMessage.replace("我是", "").trim();
       if (alias.length > 0) {
         setAlias(groupId, userId, alias);
+        await saveAliasBinding(groupId, userId, alias);
+        console.log("已儲存暱稱:", alias);
         return replyText(event, `✅ 已紀錄：你在這個群組的暱稱是「${alias}」`);
       } else {
         return replyText(event, "⚠️ 請輸入暱稱，例如：我是謝欣");

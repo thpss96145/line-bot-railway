@@ -107,46 +107,59 @@ export async function generateSettlementMessage(groupId) {
     const amount = parseFloat(金額);
     const alias = getName(groupId, 使用者ID);
 
-    if (!使用者ID || !amount || !參與者) continue;
+    for (const row of rows) {
+      console.log("🔍 處理中 row：", row);
 
-    const names = 參與者.trim().split(/\s+/); // 支援空格分隔
+      const 使用者ID = row.userId;
+      const 金額 = parseFloat(row.amount);
+      const 參與者 = row.names;
+      const 項目 = row.item;
 
-    const participantIds = names
-      .map((name) => {
-        const id = getUserId(groupId, name);
-        if (!id) {
-          console.log(`❗ 無法找到暱稱「${name}」對應的 userId`);
-        }
-        return id;
+      console.log("🧪 欄位值：", { 使用者ID, 金額, 參與者, 項目 });
+
+      if (!使用者ID || !金額 || !參與者) {
+        console.log("⚠️ 資料不完整，跳過");
+        continue;
+      }
+      const names = 參與者.trim().split(/\s+/); // 支援空格分隔
+
+      const participantIds = names
+        .map((name) => {
+          const id = getUserId(groupId, name);
+          if (!id) {
+            console.log(`❗ 無法找到暱稱「${name}」對應的 userId`);
+          }
+          return id;
+        })
+        .filter((id) => !!id);
+
+      if (!participantIds.includes(使用者ID)) participantIds.push(使用者ID);
+
+      payments.push({
+        userId: 使用者ID,
+        name: alias || "某人",
+        amount: 金額,
+        participants: participantIds,
+      });
+    }
+
+    if (payments.length === 0) return "⚠️ 無有效記帳資料。";
+
+    const balances = calculateShares(payments, groupId);
+    const transactions = settleBalances(balances, groupId);
+
+    if (transactions.length === 0) return "🎉 目前大家都平帳囉！";
+
+    const name = (uid) => getName(groupId, uid) || uid.slice(-4);
+
+    const result = transactions
+      .map(({ from, to, amount }) => {
+        const fromName = getName(groupId, from) || from.slice(-4);
+        const toName = getName(groupId, to) || to.slice(-4);
+        return `👉 ${fromName} ➜ 給 ${toName}：$${amount.toFixed(2)}`;
       })
-      .filter((id) => !!id);
+      .join("\n");
 
-    if (!participantIds.includes(使用者ID)) participantIds.push(使用者ID);
-
-    payments.push({
-      userId: 使用者ID,
-      name: alias || "某人",
-      amount,
-      participants: participantIds,
-    });
+    return `💰 分帳結果：\n${result}`;
   }
-
-  if (payments.length === 0) return "⚠️ 無有效記帳資料。";
-
-  const balances = calculateShares(payments, groupId);
-  const transactions = settleBalances(balances, groupId);
-
-  if (transactions.length === 0) return "🎉 目前大家都平帳囉！";
-
-  const name = (uid) => getName(groupId, uid) || uid.slice(-4);
-
-  const result = transactions
-    .map(({ from, to, amount }) => {
-      const fromName = getName(groupId, from) || from.slice(-4);
-      const toName = getName(groupId, to) || to.slice(-4);
-      return `👉 ${fromName} ➜ 給 ${toName}：$${amount.toFixed(2)}`;
-    })
-    .join("\n");
-
-  return `💰 分帳結果：\n${result}`;
 }

@@ -1,23 +1,18 @@
 // aliasManager.js
 
-const aliasTable = {
-  Cc0c3f0be56c135ac12cfca231f8a84e5: {
-    Ue1c97b308ff72770da7c81dac5368f13: "謝",
-    謝: "Ue1c97b308ff72770da7c81dac5368f13",
+let aliasTable = {}; // 用來儲存群組的暱稱綁定資料
 
-    U2b7a8f6c3d7b41cdd7c7e236d7fa1cf8: "楊",
-    楊: "U2b7a8f6c3d7b41cdd7c7e236d7fa1cf8",
-
-    U5e4c8f7c3b7a49d8a9d5b6f1236e845a: "何",
-    何: "U5e4c8f7c3b7a49d8a9d5b6f1236e845a",
-  },
-};
-
-// 這個 aliasTable 是用來存放群組 ID 和使用者 ID 的對應關係
-export function getAliasMap() {
-  return aliasTable;
+/**
+ * 載入整份 alias 對應表
+ * @param {Object} map - groupId → { userId: alias, alias: userId }
+ */
+export function setAliasMap(map) {
+  aliasTable = map;
 }
-// 用來設定別名
+
+/**
+ * 設定單一使用者的暱稱
+ */
 export function setAlias(groupId, userId, alias) {
   if (!aliasTable[groupId]) aliasTable[groupId] = {};
 
@@ -33,21 +28,25 @@ export function setAlias(groupId, userId, alias) {
   console.log(`✅ 綁定暱稱：${alias} (${userId}) in ${groupId}`);
 }
 
-// 根據 userId 取得 alias
+/**
+ * 根據 userId 取得暱稱
+ */
 export function getName(groupId, userId) {
-  const groupAliases = aliasTable[groupId];
-  if (!groupAliases) {
-    console.error(`Group ID ${groupId} not found.`);
-    return null;
-  }
-  const alias = groupAliases[userId];
-  if (!alias) {
-    console.error(`User ID ${userId} not found in group ${groupId}.`);
-  }
-  return alias;
+  return aliasTable?.[groupId]?.[userId] || null;
 }
 
-// 根據 alias 取得 userId
+/**
+ * 根據暱稱取得 userId
+ */
 export function getUserId(groupId, alias) {
-  return aliasTable[groupId]?.[alias];
+  const id = aliasTable?.[groupId]?.[alias] || null;
+  console.log("🧪 查詢 userId:", groupId, alias, "=>", id);
+  return id;
+}
+
+/**
+ * 回傳整個 aliasTable（用於 debug）
+ */
+export function getAliasMap() {
+  return aliasTable;
 }
