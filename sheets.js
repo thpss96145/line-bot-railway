@@ -1,7 +1,7 @@
 import { GoogleSpreadsheet } from "google-spreadsheet"; // 👈 引入 google-spreadsheet
 import { JWT } from "google-auth-library"; // 👈 引入 google-auth-library
 import dotenv from "dotenv"; // 👈 引入 dotenv
-import { getName, getUserId } from "./aliasManager.js"; // ✅ 確保有 export getAliasMap
+import { getName, getUserId, getAliasMap } from "./aliasManager.js"; // ✅ 確保有 export getAliasMap
 
 dotenv.config();
 
@@ -150,6 +150,10 @@ export async function getExpensesByGroup(groupId) {
   const idxParticipants = getIndex("分帳人數");
   const idxCategory = getIndex("類別");
   const idxNames = getIndex("參與者");
+  const idxDate = getIndex("日期"); // ✅ 抓日期欄位 index
+  const today = new Date().toLocaleDateString("zh-TW", {
+    timeZone: "Asia/Taipei",
+  });
 
   // 檢查是否找到必要的欄位
   if (
@@ -184,13 +188,19 @@ export async function getExpensesByGroup(groupId) {
     const expected = normalize(groupId);
     const match = rawGroupId === expected;
 
+    const rowDate = normalize(row._rawData?.[idxDate])?.split(" ")[0];
+    const today = new Date().toLocaleDateString("zh-TW", {
+      timeZone: "Asia/Taipei",
+    });
+    const matchDate = rowDate === today;
+
     if (!match) {
       console.log(`🧪 [第${idx + 1}筆] 不符合群組ID`);
       console.log(`👉 rawGroupId: "${rawGroupId}"`);
-      console.log(`👉 expected  : "${expected}"`);
+      if (!matchDate) console.log(`👉 日期不符: "${rowDate}" vs "${today}"`);
     }
 
-    return match;
+    return match && matchDate;
   });
 
   console.log(`✅ 有 ${filtered.length} 筆資料符合群組 ${groupId}`);
@@ -204,6 +214,7 @@ export async function getExpensesByGroup(groupId) {
       participants: Number(raw[idxParticipants]),
       category: raw[idxCategory],
       names: raw[idxNames],
+      date: raw[idxDate], // <-- 這裡你需要新增「日期」欄位
     };
   });
 }
