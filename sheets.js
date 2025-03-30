@@ -1,7 +1,7 @@
 import { GoogleSpreadsheet } from "google-spreadsheet"; // 👈 引入 google-spreadsheet
 import { JWT } from "google-auth-library"; // 👈 引入 google-auth-library
 import dotenv from "dotenv"; // 👈 引入 dotenv
-import { getName, getUserId, getAliasMap } from "./aliasManager.js"; // ✅ 確保有 export getAliasMap
+import { getName, getUserId } from "./aliasManager.js"; // ✅ 確保有 export getAliasMap
 
 dotenv.config();
 
@@ -138,8 +138,10 @@ export async function getExpensesByGroup(groupId) {
   const rows = await sheet.getRows();
   console.log("📊 資料筆數：", rows.length);
 
-  // 🧠 根據欄位名稱自動找欄位位置
+  // 檢查欄位名稱
   const headers = sheet.headerValues;
+  console.log("📝 頁面欄位名稱：", headers);
+
   const getIndex = (key) => headers.indexOf(key);
   const idxGroupId = getIndex("群組ID");
   const idxUserId = getIndex("使用者ID");
@@ -149,10 +151,31 @@ export async function getExpensesByGroup(groupId) {
   const idxCategory = getIndex("類別");
   const idxNames = getIndex("參與者");
 
-  if (idxGroupId === -1) {
-    console.error("❌ 找不到『群組ID』欄位！");
+  // 檢查是否找到必要的欄位
+  if (
+    idxGroupId === -1 ||
+    idxUserId === -1 ||
+    idxItem === -1 ||
+    idxAmount === -1 ||
+    idxParticipants === -1 ||
+    idxCategory === -1 ||
+    idxNames === -1
+  ) {
+    console.error("❌ 找不到必要的欄位！");
     return [];
   }
+
+  // 列印出每一行的資料，確保每個欄位對應正確
+  rows.forEach((row, idx) => {
+    console.log(`🧪 [第 ${idx + 1} 筆資料]`);
+    console.log("群組ID:", row._rawData[idxGroupId]);
+    console.log("使用者ID:", row._rawData[idxUserId]);
+    console.log("項目:", row._rawData[idxItem]);
+    console.log("金額:", row._rawData[idxAmount]);
+    console.log("分帳人數:", row._rawData[idxParticipants]);
+    console.log("類別:", row._rawData[idxCategory]);
+    console.log("參與者:", row._rawData[idxNames]);
+  });
 
   const normalize = (s) => s?.toString().trim();
 
